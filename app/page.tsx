@@ -9,11 +9,12 @@ import {
 import { InterpretationResult } from '@/lib/types/instructions';
 import { defaultInstructionEngine } from '@/lib/instructions/instruction-engine';
 import { defaultAudioEngine } from '@/lib/audio/audio-engine';
-import { extractAudioMetadata, isVideoFile } from '@/lib/audio/metadata';
+import { extractAudioMetadata, isVideoFile, isWhatsAppAudioFile } from '@/lib/audio/metadata';
 import { defaultVoiceController } from '@/lib/voice/voice-controller';
 import { SpeechLanguage, SpeechError } from '@/lib/voice/speech-types';
 import { speechSynthesizer, SpeechSynthesizer } from '@/lib/voice/speech-synthesis';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
+import { LiveVoiceRecorder } from '@/components/LiveVoiceRecorder';
 import {
   Mic,
   Square,
@@ -88,11 +89,13 @@ export default function CustomerHomepage() {
   const [pendingOperations, setPendingOperations] = useState<AudioOperation[]>([]);
   const [processingProgress, setProcessingProgress] = useState<number>(0);
   const [result, setResult] = useState<ProcessingResult | null>(null);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState<boolean>(false);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
+  const whatsappFileInputRef = useRef<HTMLInputElement>(null);
 
   // Hook voice controller listeners
   useEffect(() => {
@@ -283,6 +286,44 @@ export default function CustomerHomepage() {
     }
   };
 
+  // Live Voice Recording Handler
+  const handleVoiceRecordingComplete = async (file: File) => {
+    setShowVoiceRecorder(false);
+    const metadata = await extractAudioMetadata(file, file.name);
+    const trackId = `track_${Date.now()}`;
+    const blobUrl = URL.createObjectURL(file);
+
+    const newTrack: AudioTrack = {
+      id: trackId,
+      filename: file.name,
+      duration: metadata.duration,
+      format: metadata.format,
+      size: file.size,
+      metadata,
+      blobUrl,
+      file,
+      isRecordedVoice: true,
+    };
+
+    setTracks((prev) => {
+      const updated = [...prev, newTrack];
+      if (!activeTrackId) {
+        setActiveTrackId(trackId);
+        setWaveformSelection({ start: 0, end: Math.min(60, metadata.duration || 60) });
+      }
+      return updated;
+    });
+
+    setTrackSelections((prev) => ({
+      ...prev,
+      [trackId]: {
+        start: 0,
+        end: metadata.duration || 60,
+        isCustomized: false,
+      },
+    }));
+  };
+
   // File Upload
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -294,6 +335,7 @@ export default function CustomerHomepage() {
       const file = files[i];
       const metadata = await extractAudioMetadata(file, file.name);
       const isVideo = isVideoFile(file.name, file.type);
+      const isWhatsApp = isWhatsAppAudioFile(file.name, file.type);
       const trackId = `track_${Date.now()}_${i}`;
       const blobUrl = URL.createObjectURL(file);
 
@@ -307,6 +349,7 @@ export default function CustomerHomepage() {
         blobUrl,
         file,
         isVideo,
+        isWhatsAppAudio: isWhatsApp,
       });
 
       newSelections[trackId] = {
@@ -1037,6 +1080,14 @@ export default function CustomerHomepage() {
               )}
             </div>
 
+            {/* Live Voice Recorder Modal/Card */}
+            {showVoiceRecorder && (
+              <LiveVoiceRecorder
+                onSave={handleVoiceRecordingComplete}
+                onCancel={() => setShowVoiceRecorder(false)}
+              />
+            )}
+
             {tracks.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <button
@@ -1045,6 +1096,32 @@ export default function CustomerHomepage() {
                 >
                   <Upload size={22} color="var(--accent-coral)" />
                   Choose a Song (MP3 / WAV)
+                </button>
+
+                <button
+                  className="btn-big btn-big-secondary"
+                  style={{
+                    background: '#f0fdf4',
+                    borderColor: '#bbf7d0',
+                    color: '#15803d',
+                  }}
+                  onClick={() => whatsappFileInputRef.current?.click()}
+                >
+                  <MessageCircle size={22} color="#16a34a" />
+                  Import WhatsApp Audio (.opus / .ogg)
+                </button>
+
+                <button
+                  className="btn-big btn-big-secondary"
+                  style={{
+                    background: '#fff1f2',
+                    borderColor: '#fecdd3',
+                    color: '#be123c',
+                  }}
+                  onClick={() => setShowVoiceRecorder(true)}
+                >
+                  <Mic size={22} color="#e11d48" />
+                  Record Your Voice (Live Mic)
                 </button>
 
                 <button
@@ -1108,7 +1185,15 @@ export default function CustomerHomepage() {
                         )}
 
                         <div className="song-icon">
-                          {track.isVideo ? <Video size={20} color="#7c3aed" /> : <Music size={20} />}
+                          {track.isVideo ? (
+                            <Video size={20} color="#7c3aed" />
+                          ) : track.isWhatsAppAudio ? (
+                            <MessageCircle size={20} color="#16a34a" />
+                          ) : track.isRecordedVoice ? (
+                            <Mic size={20} color="#e11d48" />
+                          ) : (
+                            <Music size={20} />
+                          )}
                         </div>
 
                         <div className="song-details">
@@ -1134,6 +1219,34 @@ export default function CustomerHomepage() {
                                 }}
                               >
                                 🎬 Audio from Video
+                              </span>
+                            )}
+                            {track.isWhatsAppAudio && (
+                              <span
+                                style={{
+                                  background: '#dcfce7',
+                                  color: '#15803d',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.12rem 0.5rem',
+                                  borderRadius: '9999px',
+                                }}
+                              >
+                                🟢 WhatsApp Audio
+                              </span>
+                            )}
+                            {track.isRecordedVoice && (
+                              <span
+                                style={{
+                                  background: '#ffe4e6',
+                                  color: '#be123c',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.12rem 0.5rem',
+                                  borderRadius: '9999px',
+                                }}
+                              >
+                                🎙️ Live Voice Recording
                               </span>
                             )}
                           </div>
@@ -1478,29 +1591,58 @@ export default function CustomerHomepage() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.65rem' }}>
                   <button
                     className="btn-big btn-big-secondary"
-                    style={{ minHeight: '48px', fontSize: '0.92rem', flex: 1 }}
+                    style={{ minHeight: '46px', fontSize: '0.88rem' }}
                     onClick={() => multiFileInputRef.current?.click()}
                   >
-                    <Plus size={18} />
+                    <Plus size={16} />
                     Add Song
                   </button>
 
                   <button
                     className="btn-big btn-big-secondary"
                     style={{
-                      minHeight: '48px',
-                      fontSize: '0.92rem',
-                      flex: 1,
+                      minHeight: '46px',
+                      fontSize: '0.88rem',
+                      background: '#f0fdf4',
+                      borderColor: '#bbf7d0',
+                      color: '#15803d',
+                    }}
+                    onClick={() => whatsappFileInputRef.current?.click()}
+                  >
+                    <MessageCircle size={16} color="#16a34a" />
+                    WhatsApp
+                  </button>
+
+                  <button
+                    className="btn-big btn-big-secondary"
+                    style={{
+                      minHeight: '46px',
+                      fontSize: '0.88rem',
+                      background: '#fff1f2',
+                      borderColor: '#fecdd3',
+                      color: '#be123c',
+                    }}
+                    onClick={() => setShowVoiceRecorder(true)}
+                  >
+                    <Mic size={16} color="#e11d48" />
+                    Record Voice
+                  </button>
+
+                  <button
+                    className="btn-big btn-big-secondary"
+                    style={{
+                      minHeight: '46px',
+                      fontSize: '0.88rem',
                       background: '#f5f3ff',
                       borderColor: '#ddd6fe',
                       color: '#6d28d9',
                     }}
                     onClick={() => videoFileInputRef.current?.click()}
                   >
-                    <Video size={18} color="#7c3aed" />
+                    <Video size={16} color="#7c3aed" />
                     Add Video
                   </button>
                 </div>
@@ -1510,7 +1652,14 @@ export default function CustomerHomepage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.mp4,.mov,.webm,.mkv"
+              accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.opus,.ogg,.oga,.mp4,.mov,.webm,.mkv"
+              style={{ display: 'none' }}
+              onChange={(e) => handleFileUpload(e.target.files)}
+            />
+            <input
+              ref={whatsappFileInputRef}
+              type="file"
+              accept=".opus,.ogg,.oga,audio/ogg,audio/opus,audio/*"
               style={{ display: 'none' }}
               onChange={(e) => handleFileUpload(e.target.files)}
             />
@@ -1525,7 +1674,7 @@ export default function CustomerHomepage() {
               ref={multiFileInputRef}
               type="file"
               multiple
-              accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.mp4,.mov,.webm,.mkv"
+              accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.opus,.ogg,.oga,.mp4,.mov,.webm,.mkv"
               style={{ display: 'none' }}
               onChange={(e) => handleFileUpload(e.target.files)}
             />

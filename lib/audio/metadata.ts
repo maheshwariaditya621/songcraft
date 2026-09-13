@@ -66,8 +66,32 @@ export function isVideoFile(filename: string, mimeType?: string): boolean {
   );
 }
 
+export function isWhatsAppAudioFile(filename: string, mimeType?: string): boolean {
+  const lower = filename.toLowerCase();
+  const ext = lower.split('.').pop()?.toLowerCase();
+
+  if (ext === 'opus' || ext === 'ogg' || ext === 'oga') return true;
+
+  if (
+    lower.startsWith('ptt-') ||
+    lower.startsWith('aud-') ||
+    lower.includes('whatsapp') ||
+    lower.includes('voice note')
+  ) {
+    return true;
+  }
+
+  if (mimeType?.includes('opus') || mimeType?.includes('audio/ogg')) {
+    return true;
+  }
+
+  return false;
+}
+
 function detectFormat(filename: string, mimeType?: string): AudioFormat {
   const ext = filename.split('.').pop()?.toLowerCase();
+  if (ext === 'opus' || mimeType?.includes('opus')) return 'opus';
+  if (ext === 'ogg' || ext === 'oga' || mimeType?.includes('ogg')) return 'ogg';
   if (ext === 'mp4' || mimeType?.includes('mp4')) return 'mp4';
   if (ext === 'mov' || mimeType?.includes('quicktime')) return 'mov';
   if (ext === 'webm' || mimeType?.includes('webm')) return 'webm';

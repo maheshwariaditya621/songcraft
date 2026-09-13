@@ -3,7 +3,17 @@
  * Independent of UI, AI, and processing engine
  */
 
-export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'aac' | 'mp4' | 'mov' | 'webm' | 'mkv';
+export type AudioFormat =
+  | 'mp3'
+  | 'wav'
+  | 'm4a'
+  | 'aac'
+  | 'mp4'
+  | 'mov'
+  | 'webm'
+  | 'mkv'
+  | 'opus'
+  | 'ogg';
 export type OutputAudioFormat = 'mp3' | 'wav';
 
 export interface AudioMetadata {
@@ -25,6 +35,8 @@ export interface AudioTrack {
   blobUrl?: string;
   file?: File | Blob;
   isVideo?: boolean;
+  isWhatsAppAudio?: boolean;
+  isRecordedVoice?: boolean;
 }
 
 export interface TrimOperation {
@@ -140,6 +152,6 @@ export const DEFAULT_ENGINE_LIMITS: AudioEngineLimits = {
   maxFileSizeMb: 100,
   maxDurationSeconds: 1200, // 20 minutes
   maxTracksCount: 10,
-  supportedInputFormats: ['mp3', 'wav', 'm4a', 'aac', 'mp4', 'mov', 'webm', 'mkv'],
+  supportedInputFormats: ['mp3', 'wav', 'm4a', 'aac', 'mp4', 'mov', 'webm', 'mkv', 'opus', 'ogg'],
   supportedOutputFormats: ['mp3', 'wav'],
 };
