@@ -50,8 +50,8 @@ export default function VoiceRecorderPage() {
     // Directly trigger browser download immediately
     downloadAudioBlob(file, filename);
 
-    // Save to IndexedDB
-    await saveTrackToCache({
+    // Save to IndexedDB (safe background cache)
+    saveTrackToCache({
       id: `record_${Date.now()}`,
       name: filename,
       size: file.size,
@@ -61,7 +61,7 @@ export default function VoiceRecorderPage() {
       isRecordedVoice: true,
       blob: file,
       updatedAt: Date.now(),
-    });
+    }).catch(() => {});
   };
 
   const handleReset = () => {

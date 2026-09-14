@@ -177,8 +177,8 @@ export default function MergeSongsPage() {
         // Directly trigger browser download immediately
         downloadAudioBlob(res.output.blob, res.output.filename);
 
-        // Cache result
-        await saveTrackToCache({
+        // Cache result (safe background cache)
+        saveTrackToCache({
           id: `merged_${Date.now()}`,
           name: res.output.filename,
           size: res.output.size,
@@ -187,7 +187,7 @@ export default function MergeSongsPage() {
           format: 'mp3',
           blob: res.output.blob,
           updatedAt: Date.now(),
-        });
+        }).catch(() => {});
       } else {
         setErrorMsg(res.error?.message || 'Failed to merge audio files.');
       }

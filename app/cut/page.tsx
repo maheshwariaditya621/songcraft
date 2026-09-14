@@ -97,8 +97,8 @@ export default function CutAudioPage() {
       const initialEnd = Math.min(30, metadata.duration || 30);
       setSelection({ start: 0, end: initialEnd });
 
-      // Save to IndexedDB
-      await saveTrackToCache({
+      // Save to IndexedDB (safe background cache)
+      saveTrackToCache({
         id: trackId,
         name: filename,
         size: file.size,
@@ -107,7 +107,7 @@ export default function CutAudioPage() {
         format: metadata.format,
         blob: file,
         updatedAt: Date.now(),
-      });
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to read audio file.');
     }
@@ -207,8 +207,8 @@ export default function CutAudioPage() {
         // Directly trigger browser download immediately
         downloadAudioBlob(res.output.blob, res.output.filename);
 
-        // Cache result
-        await saveTrackToCache({
+        // Cache result (safe background cache)
+        saveTrackToCache({
           id: `cut_${Date.now()}`,
           name: res.output.filename,
           size: res.output.size,
@@ -217,7 +217,7 @@ export default function CutAudioPage() {
           format: 'mp3',
           blob: res.output.blob,
           updatedAt: Date.now(),
-        });
+        }).catch(() => {});
       } else {
         setErrorMsg(res.error?.message || 'Failed to cut audio.');
       }

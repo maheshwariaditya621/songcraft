@@ -70,8 +70,8 @@ export default function HomePage() {
       const isVideo = isVideoFile(file.name, file.type);
       const isWhatsApp = isWhatsAppAudioFile(file.name, file.type);
 
-      // Save to cache so target page can pick it up immediately
-      await saveTrackToCache({
+      // Save to cache so target page can pick it up immediately (safe background cache)
+      saveTrackToCache({
         id: `track_hub_${Date.now()}`,
         name: file.name,
         size: file.size,
@@ -82,7 +82,7 @@ export default function HomePage() {
         isWhatsAppAudio: isWhatsApp,
         blob: file,
         updatedAt: Date.now(),
-      });
+      }).catch(() => {});
 
       if (isVideo) {
         router.push('/video-to-mp3');

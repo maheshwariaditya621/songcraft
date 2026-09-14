@@ -88,8 +88,8 @@ export default function VideoToMp3Page() {
         // Directly trigger browser download immediately
         downloadAudioBlob(res.output.blob, res.output.filename);
 
-        // Cache in IndexedDB for session persistence
-        await saveTrackToCache({
+        // Cache in IndexedDB for session persistence (safe background cache)
+        saveTrackToCache({
           id: trackId,
           name: res.output.filename,
           size: res.output.size,
@@ -99,7 +99,7 @@ export default function VideoToMp3Page() {
           isFromVideo: true,
           blob: res.output.blob,
           updatedAt: Date.now(),
-        });
+        }).catch(() => {});
       } else {
         setErrorMsg(res.error?.message || 'Could not extract audio from this video.');
       }

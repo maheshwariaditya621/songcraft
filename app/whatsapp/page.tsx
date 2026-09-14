@@ -83,8 +83,8 @@ export default function WhatsAppAudioPage() {
         // Directly trigger browser download immediately
         downloadAudioBlob(res.output.blob, res.output.filename);
 
-        // Save to IndexedDB
-        await saveTrackToCache({
+        // Save to IndexedDB (safe background cache)
+        saveTrackToCache({
           id: trackId,
           name: res.output.filename,
           size: res.output.size,
@@ -94,7 +94,7 @@ export default function WhatsAppAudioPage() {
           isWhatsAppAudio: true,
           blob: res.output.blob,
           updatedAt: Date.now(),
-        });
+        }).catch(() => {});
       } else {
         setErrorMsg(res.error?.message || 'Could not convert WhatsApp audio file.');
       }

@@ -21,4 +21,20 @@ describe('Audio Cache / Session Persistence', () => {
   it('safely handles deleteCachedTrack without throwing error in Node', async () => {
     await expect(deleteCachedTrack('test_id')).resolves.toBeUndefined();
   });
+
+  it('safely handles saveTrackToCache with Blob without throwing error in Node', async () => {
+    const dummyBlob = new Blob(['dummy audio content'], { type: 'audio/mpeg' });
+    const record: CachedTrackRecord = {
+      id: 'test_track_1',
+      name: 'test.mp3',
+      size: dummyBlob.size,
+      type: 'audio/mpeg',
+      duration: 30,
+      format: 'mp3',
+      blob: dummyBlob,
+      updatedAt: Date.now(),
+    };
+
+    await expect(saveTrackToCache(record)).resolves.toBeUndefined();
+  });
 });
