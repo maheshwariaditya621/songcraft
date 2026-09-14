@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Download,
@@ -12,14 +12,17 @@ import {
   Sparkles,
   Share2,
   FileAudio,
+  ExternalLink,
 } from 'lucide-react';
-import { ProcessingResult, OutputAudioFormat } from '@/lib/types/audio';
+import { ProcessingResult } from '@/lib/types/audio';
+import { downloadAudioBlob } from '@/lib/audio/download-helper';
 
 interface DirectDownloadCardProps {
   result: ProcessingResult;
   title?: string;
   subtitle?: string;
   sourceType?: 'video' | 'whatsapp' | 'recording' | 'cut' | 'merge';
+  autoDownload?: boolean;
   onReset?: () => void;
   onEditFurther?: () => void;
 }
@@ -29,13 +32,47 @@ export function DirectDownloadCard({
   title = 'Your Audio is Ready!',
   subtitle = 'Zero loss processing complete. Download directly below:',
   sourceType,
+  autoDownload = true,
   onReset,
   onEditFurther,
 }: DirectDownloadCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string>('');
+  const [canShare, setCanShare] = useState<boolean>(false);
 
   const output = result.output;
+
+  // Create and manage object URL
+  useEffect(() => {
+    if (!output) return;
+
+    let url = output.blobUrl;
+    if (output.blob) {
+      url = URL.createObjectURL(output.blob);
+      setBlobUrl(url);
+    } else if (output.blobUrl) {
+      setBlobUrl(output.blobUrl);
+    }
+
+    // Check if Web Share API is available (especially on mobile iOS/Android)
+    if (typeof navigator !== 'undefined' && 'share' in navigator && output.blob) {
+      setCanShare(true);
+    }
+
+    // Automatically initiate download when ready if requested
+    if (autoDownload && output.blob) {
+      const filename = output.filename || `songcraft-audio.${output.format || 'mp3'}`;
+      downloadAudioBlob(output.blob, filename);
+    }
+
+    return () => {
+      if (url && url.startsWith('blob:')) {
+        // Keep active for user download
+      }
+    };
+  }, [output, autoDownload]);
+
   if (!output) {
     return (
       <div className="direct-download-card">
@@ -51,11 +88,14 @@ export function DirectDownloadCard({
     );
   }
 
+  const filename = output.filename || `songcraft-audio.${output.format || 'mp3'}`;
+  const effectiveUrl = blobUrl || output.blobUrl;
+
   const togglePlay = () => {
-    if (!output.blobUrl) return;
+    if (!effectiveUrl) return;
 
     if (!audioEl) {
-      const audio = new Audio(output.blobUrl);
+      const audio = new Audio(effectiveUrl);
       audio.onended = () => setIsPlaying(false);
       audio.play();
       setAudioEl(audio);
@@ -71,13 +111,27 @@ export function DirectDownloadCard({
     }
   };
 
-  const handleDownload = () => {
-    const a = document.createElement('a');
-    a.href = output.blobUrl;
-    a.download = output.filename || `songcraft-audio.${output.format || 'mp3'}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleManualDownload = (e: React.MouseEvent) => {
+    if (output.blob) {
+      downloadAudioBlob(output.blob, filename);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!output.blob) return;
+    try {
+      const file = new File([output.blob], filename, {
+        type: output.format === 'mp3' ? 'audio/mpeg' : 'audio/wav',
+      });
+      await navigator.share({
+        files: [file],
+        title: filename,
+        text: 'Edited with SongCraft',
+      });
+    } catch {
+      // User cancelled or share failed, fallback to direct download
+      downloadAudioBlob(output.blob, filename);
+    }
   };
 
   const formatSize = (bytes: number) => {
@@ -101,7 +155,7 @@ export function DirectDownloadCard({
         <div className="download-file-left">
           <FileAudio size={28} color="var(--accent-coral)" />
           <div>
-            <div className="download-file-name">{output.filename}</div>
+            <div className="download-file-name">{filename}</div>
             <div className="download-file-meta">
               <span>{output.format.toUpperCase()} Audio</span>
               {output.size > 0 && <span>• {formatSize(output.size)}</span>}
@@ -125,12 +179,49 @@ export function DirectDownloadCard({
         </button>
       </div>
 
-      {/* Main Direct Download CTA */}
-      <div className="download-cta-section">
-        <button className="btn-direct-download" onClick={handleDownload}>
+      {/* Main Direct Download CTA - REAL <a> tag for 100% browser compatibility */}
+      <div className="download-cta-section" style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+        <a
+          href={effectiveUrl}
+          download={filename}
+          className="btn-direct-download"
+          onClick={handleManualDownload}
+          style={{ textDecoration: 'none' }}
+        >
           <Download size={24} />
           <span>Download {output.format.toUpperCase()} Now</span>
-        </button>
+        </a>
+
+        {canShare && (
+          <button
+            className="btn-action-outline"
+            onClick={handleNativeShare}
+            style={{ width: '100%', justifyContent: 'center', minHeight: '44px' }}
+          >
+            <Share2 size={18} color="#25d366" />
+            <span>Save to Phone / Send to WhatsApp</span>
+          </button>
+        )}
+
+        {/* Fallback open link for browsers that block direct downloads */}
+        <div style={{ textAlign: 'center', marginTop: '0.25rem' }}>
+          <a
+            href={effectiveUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: '0.78rem',
+              color: 'var(--text-muted)',
+              textDecoration: 'underline',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+            }}
+          >
+            <span>Having trouble downloading? Tap here to open in new tab</span>
+            <ExternalLink size={12} />
+          </a>
+        </div>
       </div>
 
       {/* Secondary Actions / Next Steps */}

@@ -25,6 +25,7 @@ import { DirectDownloadCard } from '@/components/DirectDownloadCard';
 import { VoiceAssistantBar } from '@/components/VoiceAssistantBar';
 import { saveTrackToCache, getAllCachedTracks } from '@/lib/storage/audio-cache';
 import { useBeforeUnload } from '@/lib/hooks/useBeforeUnload';
+import { downloadAudioBlob } from '@/lib/audio/download-helper';
 
 export default function CutAudioPage() {
   const [track, setTrack] = useState<AudioTrack | null>(null);
@@ -202,6 +203,9 @@ export default function CutAudioPage() {
       if (res.success && res.output) {
         setProgress(100);
         setResult(res);
+
+        // Directly trigger browser download immediately
+        downloadAudioBlob(res.output.blob, res.output.filename);
 
         // Cache result
         await saveTrackToCache({

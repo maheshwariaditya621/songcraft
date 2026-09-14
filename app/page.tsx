@@ -28,6 +28,7 @@ import {
   saveTrackToCache,
 } from '@/lib/storage/audio-cache';
 import { isVideoFile, isWhatsAppAudioFile, extractAudioMetadata } from '@/lib/audio/metadata';
+import { downloadAudioBlob } from '@/lib/audio/download-helper';
 
 export default function HomePage() {
   const router = useRouter();
@@ -406,6 +407,16 @@ export default function HomePage() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button
+                    className="btn-action-outline"
+                    onClick={() => downloadAudioBlob(track.blob, track.name)}
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', color: '#10b981', borderColor: '#10b981' }}
+                    title="Download this file"
+                  >
+                    <Download size={13} />
+                    <span>Download</span>
+                  </button>
+
                   <Link
                     href="/cut"
                     className="btn-action-outline"

@@ -14,20 +14,22 @@ import {
   ShieldCheck,
   FolderArchive,
   Trash2,
+  Download,
 } from 'lucide-react';
 import { getAllCachedTracks, clearAllCachedTracks } from '@/lib/storage/audio-cache';
+import { downloadAudioBlob } from '@/lib/audio/download-helper';
 
 export function AppHeader() {
   const pathname = usePathname();
   const [cachedCount, setCachedCount] = useState<number>(0);
   const [showRecentDropdown, setShowRecentDropdown] = useState<boolean>(false);
-  const [recentTracks, setRecentTracks] = useState<Array<{ id: string; name: string; duration: number }>>([]);
+  const [recentTracks, setRecentTracks] = useState<Array<{ id: string; name: string; duration: number; blob: Blob }>>([]);
 
   const refreshCacheCount = async () => {
     try {
       const tracks = await getAllCachedTracks();
       setCachedCount(tracks.length);
-      setRecentTracks(tracks.map(t => ({ id: t.id, name: t.name, duration: t.duration })));
+      setRecentTracks(tracks.map(t => ({ id: t.id, name: t.name, duration: t.duration, blob: t.blob })));
     } catch {
       // ignore
     }
@@ -98,10 +100,20 @@ export function AppHeader() {
                     {recentTracks.slice(0, 5).map(track => (
                       <div key={track.id} className="dropdown-item">
                         <span className="dropdown-track-name">{track.name}</span>
-                        <span className="dropdown-track-duration">
-                          {Math.floor(track.duration / 60)}:
-                          {Math.floor(track.duration % 60).toString().padStart(2, '0')}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span className="dropdown-track-duration">
+                            {Math.floor(track.duration / 60)}:
+                            {Math.floor(track.duration % 60).toString().padStart(2, '0')}
+                          </span>
+                          <button
+                            className="btn-action-ghost"
+                            onClick={() => downloadAudioBlob(track.blob, track.name)}
+                            title="Download this track"
+                            style={{ padding: '0.2rem', color: 'var(--accent-coral)' }}
+                          >
+                            <Download size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

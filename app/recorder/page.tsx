@@ -15,6 +15,7 @@ import { LiveVoiceRecorder } from '@/components/LiveVoiceRecorder';
 import { DirectDownloadCard } from '@/components/DirectDownloadCard';
 import { ProcessingResult } from '@/lib/types/audio';
 import { saveTrackToCache } from '@/lib/storage/audio-cache';
+import { downloadAudioBlob } from '@/lib/audio/download-helper';
 
 export default function VoiceRecorderPage() {
   const [result, setResult] = useState<ProcessingResult | null>(null);
@@ -45,6 +46,9 @@ export default function VoiceRecorderPage() {
 
     setResult(procResult);
     setIsRecordingDone(true);
+
+    // Directly trigger browser download immediately
+    downloadAudioBlob(file, filename);
 
     // Save to IndexedDB
     await saveTrackToCache({
