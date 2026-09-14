@@ -88,7 +88,16 @@ export function DirectDownloadCard({
     );
   }
 
-  const filename = output.filename || `songcraft-audio.${output.format || 'mp3'}`;
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [customFilename, setCustomFilename] = useState(output.filename || `songcraft-audio.${output.format || 'mp3'}`);
+
+  useEffect(() => {
+    if (output.filename) {
+      setCustomFilename(output.filename);
+    }
+  }, [output.filename]);
+
+  const filename = customFilename.trim() || `songcraft-audio.${output.format || 'mp3'}`;
   const effectiveUrl = blobUrl || output.blobUrl;
 
   const togglePlay = () => {
@@ -152,10 +161,74 @@ export function DirectDownloadCard({
       </div>
 
       <div className="download-file-info">
-        <div className="download-file-left">
-          <FileAudio size={28} color="var(--accent-coral)" />
-          <div>
-            <div className="download-file-name">{filename}</div>
+        <div className="download-file-left" style={{ flex: 1 }}>
+          <FileAudio size={28} color="var(--accent-coral)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {isEditingName ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
+                <input
+                  type="text"
+                  value={customFilename}
+                  onChange={(e) => setCustomFilename(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setIsEditingName(false);
+                  }}
+                  autoFocus
+                  style={{
+                    padding: '0.35rem 0.6rem',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    borderRadius: '8px',
+                    border: '1.5px solid var(--accent-coral)',
+                    background: '#ffffff',
+                    width: '100%',
+                    maxWidth: '320px',
+                    outline: 'none',
+                    color: 'var(--text-main)',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(false)}
+                  style={{
+                    background: 'var(--accent-coral)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.65rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span className="download-file-name" style={{ wordBreak: 'break-all' }}>{filename}</span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  title="Rename file"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.2rem',
+                    background: 'rgba(249, 115, 22, 0.1)',
+                    border: '1px solid rgba(249, 115, 22, 0.3)',
+                    color: 'var(--accent-coral)',
+                    borderRadius: '6px',
+                    padding: '0.15rem 0.45rem',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✏️ Rename
+                </button>
+              </div>
+            )}
             <div className="download-file-meta">
               <span>{output.format.toUpperCase()} Audio</span>
               {output.size > 0 && <span>• {formatSize(output.size)}</span>}

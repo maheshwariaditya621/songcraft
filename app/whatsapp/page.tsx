@@ -174,8 +174,8 @@ export default function WhatsAppAudioPage() {
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.35rem' }}>
             Select WhatsApp Voice Note (.opus / .ogg)
           </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-            Export voice note from WhatsApp and tap here to convert
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+            Export voice note from WhatsApp and tap here to convert • <strong>Up to 100MB</strong>
           </p>
 
           <button

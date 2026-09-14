@@ -441,6 +441,95 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* Tool Limits & Specifications Section */}
+      <section
+        className="aesthetic-card"
+        style={{
+          marginTop: '1.5rem',
+          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.6))',
+          border: '1.5px solid var(--border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #f97316, #ea580c)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: '0.95rem',
+            }}
+          >
+            ⚡
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+              SongCraft Tool Limits & Specifications
+            </h3>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              100% In-Browser • Zero Server Queue • Unlimited Daily Conversions
+            </span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+            gap: '0.75rem',
+            marginTop: '1rem',
+          }}
+        >
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem' }}>
+            <div style={{ fontWeight: 800, color: 'var(--accent-coral)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+              ✂️ Cut / Trim Audio
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
+              • <strong>Max File Size:</strong> 200 MB<br />
+              • <strong>Max Duration:</strong> Up to 30 mins<br />
+              • <strong>Formats:</strong> MP3, WAV, AAC, M4A, OGG, OPUS, FLAC
+            </div>
+          </div>
+
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem' }}>
+            <div style={{ fontWeight: 800, color: '#7c3aed', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+              🔀 Merge Songs
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
+              • <strong>Capacity:</strong> Up to 10 songs at once<br />
+              • <strong>Combined Size:</strong> 250 MB max<br />
+              • <strong>Crossfade:</strong> 0s to 10s smooth fade
+            </div>
+          </div>
+
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem' }}>
+            <div style={{ fontWeight: 800, color: '#0284c7', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+              🎬 Video to MP3
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
+              • <strong>Max Video Size:</strong> Up to 500 MB<br />
+              • <strong>Formats:</strong> MP4, MKV, MOV, WebM, AVI<br />
+              • <strong>Output:</strong> Clean high-bitrate MP3
+            </div>
+          </div>
+
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem' }}>
+            <div style={{ fontWeight: 800, color: '#059669', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+              💬 WhatsApp & 🎙️ Recorder
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
+              • <strong>WhatsApp:</strong> Up to 100 MB voice notes<br />
+              • <strong>Voice Recorder:</strong> Up to 60 mins continuous<br />
+              • <strong>Daily Limit:</strong> Completely unlimited & free
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 100% Privacy Guarantee Callout */}
       <footer
         style={{
@@ -465,3 +554,4 @@ export default function HomePage() {
     </main>
   );
 }
+

@@ -181,6 +181,33 @@ export async function deleteCachedTrack(id: string): Promise<void> {
 }
 
 /**
+ * Rename a cached track by ID
+ */
+export async function renameCachedTrack(id: string, newName: string): Promise<void> {
+  try {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_TRACKS, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      const store = tx.objectStore(STORE_TRACKS);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const record = req.result as StoredDBRecord | undefined;
+        if (record) {
+          record.name = newName.trim();
+          record.updatedAt = Date.now();
+          store.put(record);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('[AudioCache] Failed to rename track:', err);
+  }
+}
+
+/**
  * Clear all cached audio files
  */
 export async function clearAllCachedTracks(): Promise<void> {
@@ -197,4 +224,5 @@ export async function clearAllCachedTracks(): Promise<void> {
     console.warn('[AudioCache] Failed to clear tracks:', err);
   }
 }
+
 

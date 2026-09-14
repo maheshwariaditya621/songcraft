@@ -4,6 +4,7 @@ import {
   getAllCachedTracks,
   deleteCachedTrack,
   clearAllCachedTracks,
+  renameCachedTrack,
   CachedTrackRecord,
 } from '../lib/storage/audio-cache';
 
@@ -20,6 +21,10 @@ describe('Audio Cache / Session Persistence', () => {
 
   it('safely handles deleteCachedTrack without throwing error in Node', async () => {
     await expect(deleteCachedTrack('test_id')).resolves.toBeUndefined();
+  });
+
+  it('safely handles renameCachedTrack without throwing error in Node', async () => {
+    await expect(renameCachedTrack('test_id', 'new_name.mp3')).resolves.toBeUndefined();
   });
 
   it('safely handles saveTrackToCache with Blob without throwing error in Node', async () => {

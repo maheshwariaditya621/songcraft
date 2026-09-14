@@ -23,9 +23,10 @@ import { defaultAudioEngine } from '@/lib/audio/audio-engine';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
 import { DirectDownloadCard } from '@/components/DirectDownloadCard';
 import { VoiceAssistantBar } from '@/components/VoiceAssistantBar';
-import { saveTrackToCache, getAllCachedTracks } from '@/lib/storage/audio-cache';
+import { saveTrackToCache, getAllCachedTracks, CachedTrackRecord } from '@/lib/storage/audio-cache';
 import { useBeforeUnload } from '@/lib/hooks/useBeforeUnload';
 import { downloadAudioBlob } from '@/lib/audio/download-helper';
+import { FolderArchive, Flag } from 'lucide-react';
 
 export default function CutAudioPage() {
   const [track, setTrack] = useState<AudioTrack | null>(null);
@@ -37,15 +38,26 @@ export default function CutAudioPage() {
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Mobile Friendly Audio Trimmer Controls
+  const [playheadTime, setPlayheadTime] = useState<number>(0);
+  const [isPlayingFull, setIsPlayingFull] = useState<boolean>(false);
+  const fullAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Saved Songs Integration
+  const [savedTracks, setSavedTracks] = useState<CachedTrackRecord[]>([]);
+  const [showSavedPicker, setShowSavedPicker] = useState<boolean>(false);
+  const [customOutputName, setCustomOutputName] = useState<string>('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useBeforeUnload(isProcessing, 'Audio cutting is in progress. Are you sure you want to leave?');
 
-  // Load most recent cached track on mount if available
+  // Load saved tracks on mount
   useEffect(() => {
     async function loadRecent() {
       try {
         const cached = await getAllCachedTracks();
+        setSavedTracks(cached);
         if (cached.length > 0 && !track) {
           const latest = cached[0];
           const blobUrl = URL.createObjectURL(latest.blob);
@@ -73,6 +85,66 @@ export default function CutAudioPage() {
     loadRecent();
   }, []);
 
+  // Sync full audio preview
+  useEffect(() => {
+    if (!track?.blobUrl) return;
+    const audio = new Audio(track.blobUrl);
+    fullAudioRef.current = audio;
+
+    const onTimeUpdate = () => setPlayheadTime(audio.currentTime);
+    const onEnded = () => setIsPlayingFull(false);
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('ended', onEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, [track?.blobUrl]);
+
+  const toggleFullPlay = () => {
+    if (!fullAudioRef.current) return;
+    if (isPlayingFull) {
+      fullAudioRef.current.pause();
+      setIsPlayingFull(false);
+    } else {
+      fullAudioRef.current.play();
+      setIsPlayingFull(true);
+    }
+  };
+
+  const setStartToCurrent = () => {
+    if (!track) return;
+    const t = Math.floor(fullAudioRef.current ? fullAudioRef.current.currentTime : selection.start);
+    const nextStart = Math.max(0, Math.min(selection.end - 1, t));
+    setSelection((prev) => ({ ...prev, start: nextStart }));
+  };
+
+  const setEndToCurrent = () => {
+    if (!track) return;
+    const t = Math.ceil(fullAudioRef.current ? fullAudioRef.current.currentTime : selection.end);
+    const nextEnd = Math.min(track.duration, Math.max(selection.start + 1, t));
+    setSelection((prev) => ({ ...prev, end: nextEnd }));
+  };
+
+  const adjustStart = (delta: number) => {
+    if (!track) return;
+    setSelection((prev) => {
+      const nextStart = Math.max(0, Math.min(prev.end - 1, prev.start + delta));
+      return { ...prev, start: Math.round(nextStart) };
+    });
+  };
+
+  const adjustEnd = (delta: number) => {
+    if (!track) return;
+    setSelection((prev) => {
+      const nextEnd = Math.min(track.duration, Math.max(prev.start + 1, prev.end + delta));
+      return { ...prev, end: Math.round(nextEnd) };
+    });
+  };
+
   const handleAudioUpload = async (file: File | Blob, filename: string) => {
     setErrorMsg(null);
     setResult(null);
@@ -96,6 +168,7 @@ export default function CutAudioPage() {
       setTrack(newTrack);
       const initialEnd = Math.min(30, metadata.duration || 30);
       setSelection({ start: 0, end: initialEnd });
+      setCustomOutputName(`Cut_${filename.replace(/\.[^/.]+$/, '')}.mp3`);
 
       // Save to IndexedDB (safe background cache)
       saveTrackToCache({
@@ -187,12 +260,13 @@ export default function CutAudioPage() {
     }
 
     try {
+      const finalOutName = customOutputName.trim() || `${track.filename.replace(/\.[^/.]+$/, '')}-cut.mp3`;
       const res = await defaultAudioEngine.processAudio(
         {
           tracks: [track],
           operations,
           outputFormat: 'mp3',
-          outputFilename: `${track.filename.replace(/\.[^/.]+$/, '')}-cut.mp3`,
+          outputFilename: finalOutName.endsWith('.mp3') ? finalOutName : `${finalOutName}.mp3`,
         },
         (p: number) => {
           setProgress(Math.min(95, Math.max(20, Math.round(p * 100))));
@@ -304,22 +378,36 @@ export default function CutAudioPage() {
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.35rem' }}>
             Choose an Audio File to Cut
           </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-            Supports MP3, WAV, M4A, AAC, WhatsApp voice notes
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+            Supports MP3, WAV, M4A, AAC, OPUS, OGG • <strong>Up to 200MB & 30 mins</strong>
           </p>
 
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
               className="btn-big"
-              style={{ maxWidth: '240px' }}
+              style={{ maxWidth: '220px' }}
               onClick={(e) => {
                 e.stopPropagation();
                 fileInputRef.current?.click();
               }}
             >
-              <Upload size={20} />
+              <Upload size={18} />
               <span>Select Song</span>
             </button>
+
+            {savedTracks.length > 0 && (
+              <button
+                className="btn-action-outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSavedPicker(true);
+                }}
+                style={{ borderColor: 'var(--accent-coral)', color: 'var(--accent-coral)' }}
+              >
+                <FolderArchive size={16} />
+                <span>⚡ Saved Songs ({savedTracks.length})</span>
+              </button>
+            )}
 
             <button
               className="btn-action-outline"
@@ -331,6 +419,109 @@ export default function CutAudioPage() {
               <Sparkles size={16} />
               <span>Use Sample Song</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Saved Songs Selection Modal */}
+      {showSavedPicker && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowSavedPicker(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '1.5rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              position: 'relative',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FolderArchive size={20} color="var(--accent-coral)" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Choose from Saved Songs</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSavedPicker(false)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  color: '#64748b',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Pick any song you cut, recorded, or extracted previously to trim it now:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {savedTracks.map((st) => (
+                <div
+                  key={st.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0, marginRight: '0.75rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {st.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                      {formatTime(st.duration)} • {(st.size / (1024 * 1024)).toFixed(1)} MB • {st.format.toUpperCase()}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-big"
+                    onClick={() => {
+                      setShowSavedPicker(false);
+                      handleAudioUpload(st.blob, st.name);
+                    }}
+                    style={{
+                      padding: '0.4rem 0.85rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      minHeight: '36px',
+                    }}
+                  >
+                    <span>Trim This</span>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -367,6 +558,96 @@ export default function CutAudioPage() {
             />
           )}
 
+          {/* Mobile-Friendly Live Play & Marker Bar */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(234, 88, 12, 0.04))',
+              border: '1.5px solid rgba(249, 115, 22, 0.2)',
+              borderRadius: '16px',
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  onClick={toggleFullPlay}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    background: 'var(--accent-coral)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '0.45rem 0.9rem',
+                    fontSize: '0.88rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {isPlayingFull ? <Pause size={16} /> : <Play size={16} />}
+                  <span>{isPlayingFull ? 'Pause Song' : 'Play Song'}</span>
+                </button>
+                <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 800, color: 'var(--text-main)' }}>
+                  {formatTime(playheadTime)} / {formatTime(track.duration)}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={setStartToCurrent}
+                  title="Set cut start time to current playing second"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    background: '#ffffff',
+                    border: '1.5px solid #10b981',
+                    color: '#059669',
+                    borderRadius: '8px',
+                    padding: '0.4rem 0.75rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Flag size={14} color="#10b981" />
+                  <span>Mark Start Here</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={setEndToCurrent}
+                  title="Set cut end time to current playing second"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    background: '#ffffff',
+                    border: '1.5px solid #ef4444',
+                    color: '#dc2626',
+                    borderRadius: '8px',
+                    padding: '0.4rem 0.75rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span>🏁</span>
+                  <span>Mark End Here</span>
+                </button>
+              </div>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+              💡 <strong>Mobile tip:</strong> Play the song and tap <em>Mark Start</em> and <em>Mark End</em> at the exact moments you want! No tricky dragging needed.
+            </p>
+          </div>
+
           {/* Quick Presets Chips */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -383,37 +664,114 @@ export default function CutAudioPage() {
             </button>
           </div>
 
-          {/* Start & End Times + Fades */}
+          {/* Start & End Steppers + Direct MM:SS Control Cards */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '0.75rem',
+            }}
+          >
+            {/* Start Time Card */}
+            <div
+              style={{
+                background: 'var(--bg-card-subtle)',
+                padding: '1rem',
+                borderRadius: '16px',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#059669' }}>
+                  🚩 Start Time
+                </span>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                  {formatTime(selection.start)}
+                </span>
+              </div>
+
+              {/* Stepper Buttons for Start */}
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                {[-5, -1, 1, 5].map((delta) => (
+                  <button
+                    key={`start_${delta}`}
+                    type="button"
+                    onClick={() => adjustStart(delta)}
+                    style={{
+                      flex: 1,
+                      minHeight: '38px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-strong)',
+                      background: '#ffffff',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      color: delta < 0 ? '#dc2626' : '#16a34a',
+                    }}
+                  >
+                    {delta > 0 ? `+${delta}s` : `${delta}s`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* End Time Card */}
+            <div
+              style={{
+                background: 'var(--bg-card-subtle)',
+                padding: '1rem',
+                borderRadius: '16px',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#dc2626' }}>
+                  🏁 End Time
+                </span>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                  {formatTime(selection.end)}
+                </span>
+              </div>
+
+              {/* Stepper Buttons for End */}
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                {[-5, -1, 1, 5].map((delta) => (
+                  <button
+                    key={`end_${delta}`}
+                    type="button"
+                    onClick={() => adjustEnd(delta)}
+                    style={{
+                      flex: 1,
+                      minHeight: '38px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-strong)',
+                      background: '#ffffff',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      color: delta < 0 ? '#dc2626' : '#16a34a',
+                    }}
+                  >
+                    {delta > 0 ? `+${delta}s` : `${delta}s`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Fade Effects & Filename Input */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
               gap: '0.75rem',
               background: 'var(--bg-card-subtle)',
               padding: '1rem',
               borderRadius: '16px',
             }}
           >
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                Start Time:
-              </label>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'JetBrains Mono' }}>
-                {formatTime(selection.start)}
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                End Time:
-              </label>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'JetBrains Mono' }}>
-                {formatTime(selection.end)}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', justifyContent: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={fadeIn}
@@ -421,7 +779,7 @@ export default function CutAudioPage() {
                 />
                 <span>Smooth Fade In (2s)</span>
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={fadeOut}
@@ -429,6 +787,28 @@ export default function CutAudioPage() {
                 />
                 <span>Smooth Fade Out (3s)</span>
               </label>
+            </div>
+
+            {/* Custom Output Name */}
+            <div>
+              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                Save As Filename:
+              </label>
+              <input
+                type="text"
+                value={customOutputName}
+                onChange={(e) => setCustomOutputName(e.target.value)}
+                placeholder="My_Ringtone.mp3"
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                }}
+              />
             </div>
           </div>
 

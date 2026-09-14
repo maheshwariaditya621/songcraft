@@ -193,7 +193,7 @@ export default function VideoToMp3Page() {
             Choose or Drop Video File Here
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-            Supports MP4, MKV, MOV, WebM (up to 100MB)
+            Supports MP4, MKV, MOV, WebM, AVI • <strong>Up to 500MB</strong>
           </p>
 
           <button

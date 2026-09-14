@@ -19,9 +19,10 @@ import { extractAudioMetadata } from '@/lib/audio/metadata';
 import { defaultAudioEngine } from '@/lib/audio/audio-engine';
 import { DirectDownloadCard } from '@/components/DirectDownloadCard';
 import { VoiceAssistantBar } from '@/components/VoiceAssistantBar';
-import { saveTrackToCache, getAllCachedTracks } from '@/lib/storage/audio-cache';
+import { saveTrackToCache, getAllCachedTracks, CachedTrackRecord } from '@/lib/storage/audio-cache';
 import { useBeforeUnload } from '@/lib/hooks/useBeforeUnload';
 import { downloadAudioBlob } from '@/lib/audio/download-helper';
+import { FolderArchive } from 'lucide-react';
 
 export default function MergeSongsPage() {
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
@@ -34,6 +35,11 @@ export default function MergeSongsPage() {
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Saved Songs Integration & Custom Naming
+  const [savedTracks, setSavedTracks] = useState<CachedTrackRecord[]>([]);
+  const [showSavedPicker, setShowSavedPicker] = useState<boolean>(false);
+  const [customOutputName, setCustomOutputName] = useState<string>('My_Merged_Medley.mp3');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useBeforeUnload(isProcessing, 'Merging audio tracks is in progress. Are you sure you want to leave?');
@@ -43,6 +49,7 @@ export default function MergeSongsPage() {
     async function loadRecent() {
       try {
         const cached = await getAllCachedTracks();
+        setSavedTracks(cached);
         if (cached.length >= 2 && tracks.length === 0) {
           const restored = cached.slice(0, 3).map((c) => ({
             id: c.id,
@@ -62,6 +69,21 @@ export default function MergeSongsPage() {
     }
     loadRecent();
   }, []);
+
+  const handleAddSavedTrack = (st: CachedTrackRecord) => {
+    const blobUrl = URL.createObjectURL(st.blob);
+    const newTrack: AudioTrack = {
+      id: `saved_${st.id}_${Date.now()}`,
+      filename: st.name,
+      duration: st.duration || 60,
+      format: st.format as any,
+      size: st.size,
+      metadata: { duration: st.duration, format: st.format as any, size: st.size },
+      blobUrl,
+      file: st.blob,
+    };
+    setTracks((prev) => [...prev, newTrack]);
+  };
 
   const handleFilesUpload = async (files: FileList | File[]) => {
     setErrorMsg(null);
@@ -157,12 +179,13 @@ export default function MergeSongsPage() {
     }
 
     try {
+      const finalOutName = customOutputName.trim() || `merged_medley_${Date.now()}.mp3`;
       const res = await defaultAudioEngine.processAudio(
         {
           tracks,
           operations,
           outputFormat: 'mp3',
-          outputFilename: `merged_medley_${Date.now()}.mp3`,
+          outputFilename: finalOutName.endsWith('.mp3') ? finalOutName : `${finalOutName}.mp3`,
         },
         (p: number) => {
           setProgress(Math.min(95, Math.max(15, Math.round(p * 100))));
@@ -247,13 +270,27 @@ export default function MergeSongsPage() {
             )}
           </div>
 
-          <button
-            className="btn-action-outline"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Plus size={16} />
-            <span>Add Songs</span>
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn-action-outline"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Plus size={16} />
+              <span>Add Songs</span>
+            </button>
+
+            {savedTracks.length > 0 && (
+              <button
+                type="button"
+                className="btn-action-outline"
+                onClick={() => setShowSavedPicker(true)}
+                style={{ borderColor: 'var(--accent-coral)', color: 'var(--accent-coral)' }}
+              >
+                <FolderArchive size={16} />
+                <span>⚡ Pick from Saved ({savedTracks.length})</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {tracks.length === 0 ? (
@@ -269,9 +306,38 @@ export default function MergeSongsPage() {
           >
             <Upload size={32} color="var(--accent-coral)" style={{ margin: '0 auto 0.75rem' }} />
             <h4 style={{ fontWeight: 800, marginBottom: '0.25rem' }}>Select 2 or more songs to join</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Click here to browse files or drop audio tracks
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+              Supports MP3, WAV, AAC, M4A, OGG • <strong>Up to 10 songs & 250MB</strong>
             </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn-big"
+                style={{ maxWidth: '220px' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Plus size={18} />
+                <span>Browse Songs</span>
+              </button>
+
+              {savedTracks.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-action-outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSavedPicker(true);
+                  }}
+                  style={{ borderColor: 'var(--accent-coral)', color: 'var(--accent-coral)' }}
+                >
+                  <FolderArchive size={16} />
+                  <span>⚡ Pick from Saved Songs ({savedTracks.length})</span>
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
@@ -422,6 +488,30 @@ export default function MergeSongsPage() {
           </div>
         )}
 
+        {/* Custom Output Name Input */}
+        {tracks.length >= 2 && (
+          <div style={{ background: 'var(--bg-card-subtle)', padding: '0.85rem 1rem', borderRadius: '14px', border: '1px solid var(--border-subtle)' }}>
+            <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+              Save Merged Medley As:
+            </label>
+            <input
+              type="text"
+              value={customOutputName}
+              onChange={(e) => setCustomOutputName(e.target.value)}
+              placeholder="My_Merged_Medley.mp3"
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border-strong)',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
+
         {/* Action Button */}
         <button
           className="btn-big"
@@ -468,6 +558,110 @@ export default function MergeSongsPage() {
           sourceType="merge"
           onReset={() => setResult(null)}
         />
+      )}
+
+      {/* Saved Songs Selection Modal */}
+      {showSavedPicker && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowSavedPicker(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '1.5rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              position: 'relative',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FolderArchive size={20} color="var(--accent-coral)" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Pick from Saved Songs</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSavedPicker(false)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  color: '#64748b',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Select any song you previously cut or recorded to add it directly to this merge mix:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {savedTracks.map((st) => (
+                <div
+                  key={st.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0, marginRight: '0.75rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {st.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                      {Math.floor(st.duration / 60)}:
+                      {Math.floor(st.duration % 60).toString().padStart(2, '0')} • {(st.size / (1024 * 1024)).toFixed(1)} MB • {st.format.toUpperCase()}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-big"
+                    onClick={() => {
+                      handleAddSavedTrack(st);
+                      setShowSavedPicker(false);
+                    }}
+                    style={{
+                      padding: '0.4rem 0.85rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      minHeight: '36px',
+                    }}
+                  >
+                    <span>+ Add to Mix</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Repositioned Bottom Contextual AI Assistant */}
