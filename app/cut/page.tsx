@@ -488,17 +488,17 @@ export default function CutAudioPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0.75rem',
+                    padding: '0.75rem 1rem',
                     background: '#f8fafc',
                     borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
+                    border: '1.5px solid #e2e8f0',
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0, marginRight: '0.75rem' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {st.name}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    <div style={{ fontSize: '0.76rem', color: '#475569', marginTop: '0.15rem' }}>
                       {formatTime(st.duration)} • {(st.size / (1024 * 1024)).toFixed(1)} MB • {st.format.toUpperCase()}
                     </div>
                   </div>
@@ -511,10 +511,12 @@ export default function CutAudioPage() {
                       handleAudioUpload(st.blob, st.name);
                     }}
                     style={{
-                      padding: '0.4rem 0.85rem',
-                      fontSize: '0.82rem',
+                      padding: '0.45rem 1rem',
+                      fontSize: '0.84rem',
                       fontWeight: 700,
-                      minHeight: '36px',
+                      minHeight: '38px',
+                      background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                      color: '#ffffff',
                     }}
                   >
                     <span>Trim This</span>
