@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AppHeader } from '@/components/AppHeader';
 
 export const metadata: Metadata = {
-  title: 'SongCraft — Just Tell Us What You Want',
+  title: 'SongCraft — Simple, Instant In-Browser Audio Tools',
   description:
-    'Consumer-friendly audio editing assistant. Cut, join, and edit songs using your voice or plain words without technical jargon.',
+    'Free audio tools: Cut songs, merge tracks, extract MP3 from video with direct download, convert WhatsApp voice notes, and record voice. 100% private in your browser.',
 };
 
 export const viewport: Viewport = {
@@ -29,7 +30,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppHeader />
+        {children}
+      </body>
     </html>
   );
 }
