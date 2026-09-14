@@ -233,6 +233,16 @@ export function WaveformVisualizer({
       ctx.fill();
     });
 
+    // Start Boundary Marker Line (Green)
+    const startX = startRatio * width;
+    ctx.fillStyle = '#10B981';
+    ctx.fillRect(startX - 1, 0, 2, height);
+
+    // End Boundary Marker Line (Red)
+    const endX = endRatio * width;
+    ctx.fillStyle = '#EF4444';
+    ctx.fillRect(endX - 1, 0, 2, height);
+
     // Draw playhead line across waveform
     if (currentTime >= 0 && currentTime <= duration) {
       const playheadX = playRatio * width;
@@ -270,10 +280,13 @@ export function WaveformVisualizer({
       const clamped = Math.max(0, Math.min(selection.end - 1, newTime));
       onSelectionChange({ start: clamped, end: selection.end });
       setCurrentTime(clamped);
+      if (onSeek) onSeek(clamped);
       if (audioRef.current) audioRef.current.currentTime = clamped;
     } else if (isDragging === 'end') {
       const clamped = Math.max(selection.start + 1, Math.min(duration, newTime));
       onSelectionChange({ start: selection.start, end: clamped });
+      setCurrentTime(clamped);
+      if (onSeek) onSeek(clamped);
     }
   };
 

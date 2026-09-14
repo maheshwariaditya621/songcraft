@@ -121,6 +121,7 @@ export default function CutAudioPage() {
     const t = Math.floor(fullAudioRef.current ? fullAudioRef.current.currentTime : selection.start);
     const nextStart = Math.max(0, Math.min(selection.end - 1, t));
     setSelection((prev) => ({ ...prev, start: nextStart }));
+    setPlayheadTime(nextStart);
   };
 
   const setEndToCurrent = () => {
@@ -128,13 +129,20 @@ export default function CutAudioPage() {
     const t = Math.ceil(fullAudioRef.current ? fullAudioRef.current.currentTime : selection.end);
     const nextEnd = Math.min(track.duration, Math.max(selection.start + 1, t));
     setSelection((prev) => ({ ...prev, end: nextEnd }));
+    setPlayheadTime(nextEnd);
   };
 
   const adjustStart = (delta: number) => {
     if (!track) return;
     setSelection((prev) => {
       const nextStart = Math.max(0, Math.min(prev.end - 1, prev.start + delta));
-      return { ...prev, start: Math.round(nextStart) };
+      const rounded = Math.round(nextStart);
+      // Keep audio player, playhead, and wave marker completely in sync
+      if (fullAudioRef.current) {
+        fullAudioRef.current.currentTime = rounded;
+      }
+      setPlayheadTime(rounded);
+      return { ...prev, start: rounded };
     });
   };
 
@@ -142,7 +150,13 @@ export default function CutAudioPage() {
     if (!track) return;
     setSelection((prev) => {
       const nextEnd = Math.min(track.duration, Math.max(prev.start + 1, prev.end + delta));
-      return { ...prev, end: Math.round(nextEnd) };
+      const rounded = Math.round(nextEnd);
+      // Keep audio player, playhead, and wave marker completely in sync
+      if (fullAudioRef.current) {
+        fullAudioRef.current.currentTime = Math.max(prev.start, rounded - 2);
+      }
+      setPlayheadTime(Math.max(prev.start, rounded - 2));
+      return { ...prev, end: rounded };
     });
   };
 
@@ -461,7 +475,13 @@ export default function CutAudioPage() {
               audioFile={track.file || null}
               duration={track.duration}
               selection={selection}
-              onSelectionChange={(sel) => setSelection(sel)}
+              onSelectionChange={(sel) => {
+                setSelection(sel);
+                setPlayheadTime(sel.start);
+                if (fullAudioRef.current) {
+                  fullAudioRef.current.currentTime = sel.start;
+                }
+              }}
               externalPlayheadTime={playheadTime}
               onSeek={(time) => {
                 setPlayheadTime(time);
@@ -531,7 +551,7 @@ export default function CutAudioPage() {
                   }}
                 >
                   <Flag size={14} color="#10b981" />
-                  <span>Mark Start Here</span>
+                  <span>Mark Start</span>
                 </button>
 
                 {/* Direct 1-second step back button */}
@@ -554,7 +574,7 @@ export default function CutAudioPage() {
                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                   }}
                 >
-                  <span>⏪ Take 1s Back</span>
+                  <span>⏪ -1s</span>
                 </button>
 
                 <button
@@ -596,12 +616,42 @@ export default function CutAudioPage() {
                   }}
                 >
                   <span>🏁</span>
-                  <span>Mark End Here</span>
+                  <span>Mark End</span>
+                </button>
+
+                {/* Direct Audition from Start Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (fullAudioRef.current) {
+                      fullAudioRef.current.currentTime = selection.start;
+                      fullAudioRef.current.play();
+                      setIsPlayingFull(true);
+                    }
+                    setPlayheadTime(selection.start);
+                  }}
+                  title="Jump to start of cut and play to verify"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    background: '#fff7ed',
+                    border: '1.5px solid #ea580c',
+                    color: '#c2410c',
+                    borderRadius: '8px',
+                    padding: '0.4rem 0.65rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Play size={12} fill="currentColor" />
+                  <span>Listen from Start</span>
                 </button>
               </div>
             </div>
             <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              💡 <strong>Mobile tip:</strong> Tap the waveform to jump to any beat, or play the song and tap <em>Mark Start</em> followed by <em>⏪ Take 1s Back</em> for the perfect cut!
+              💡 <strong>Instant Sync:</strong> Moving the start marker on the waves, tapping <em>Mark Start</em>, or tapping <em>⏪ -1s</em> keeps the waveform, player, and counters completely synchronized!
             </p>
           </div>
 
