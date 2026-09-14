@@ -27,6 +27,7 @@ import { saveTrackToCache, getAllCachedTracks, CachedTrackRecord } from '@/lib/s
 import { useBeforeUnload } from '@/lib/hooks/useBeforeUnload';
 import { downloadAudioBlob } from '@/lib/audio/download-helper';
 import { FolderArchive, Flag } from 'lucide-react';
+import { SavedSongsModal } from '@/components/SavedSongsModal';
 
 export default function CutAudioPage() {
   const [track, setTrack] = useState<AudioTrack | null>(null);
@@ -423,110 +424,14 @@ export default function CutAudioPage() {
         </div>
       )}
 
-      {/* Saved Songs Selection Modal */}
-      {showSavedPicker && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
-          }}
-          onClick={() => setShowSavedPicker(false)}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '20px',
-              maxWidth: '520px',
-              width: '100%',
-              padding: '1.5rem',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              position: 'relative',
-              maxHeight: '85vh',
-              overflowY: 'auto',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FolderArchive size={20} color="var(--accent-coral)" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Choose from Saved Songs</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSavedPicker(false)}
-                style={{
-                  background: '#f1f5f9',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  fontWeight: 800,
-                  color: '#64748b',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-              Pick any song you cut, recorded, or extracted previously to trim it now:
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {savedTracks.map((st) => (
-                <div
-                  key={st.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.75rem 1rem',
-                    background: '#f8fafc',
-                    borderRadius: '12px',
-                    border: '1.5px solid #e2e8f0',
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0, marginRight: '0.75rem' }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {st.name}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: '#475569', marginTop: '0.15rem' }}>
-                      {formatTime(st.duration)} • {(st.size / (1024 * 1024)).toFixed(1)} MB • {st.format.toUpperCase()}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn-big"
-                    onClick={() => {
-                      setShowSavedPicker(false);
-                      handleAudioUpload(st.blob, st.name);
-                    }}
-                    style={{
-                      padding: '0.45rem 1rem',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      minHeight: '38px',
-                      background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                      color: '#ffffff',
-                    }}
-                  >
-                    <span>Trim This</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Saved Songs Selection Modal with Audio Preview */}
+      <SavedSongsModal
+        isOpen={showSavedPicker}
+        onClose={() => setShowSavedPicker(false)}
+        onSelectTrack={(st) => handleAudioUpload(st.blob, st.name)}
+        actionLabel="Trim This Song"
+        title="Choose from Saved Songs"
+      />
 
       {/* Main Trimming Workspace — Right at the Top! */}
       {track && (
@@ -550,17 +455,24 @@ export default function CutAudioPage() {
             </button>
           </div>
 
-          {/* Interactive Waveform Visualizer */}
+          {/* Interactive Waveform Visualizer — Synchronized with Player & Click-to-Seek */}
           {track && (
             <WaveformVisualizer
               audioFile={track.file || null}
               duration={track.duration}
               selection={selection}
               onSelectionChange={(sel) => setSelection(sel)}
+              externalPlayheadTime={playheadTime}
+              onSeek={(time) => {
+                setPlayheadTime(time);
+                if (fullAudioRef.current) {
+                  fullAudioRef.current.currentTime = time;
+                }
+              }}
             />
           )}
 
-          {/* Mobile-Friendly Live Play & Marker Bar */}
+          {/* Mobile-Friendly Live Play & Marker Bar with 1-Sec Back Compensation */}
           <div
             style={{
               background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(234, 88, 12, 0.04))',
@@ -599,7 +511,7 @@ export default function CutAudioPage() {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button
                   type="button"
                   onClick={setStartToCurrent}
@@ -620,6 +532,49 @@ export default function CutAudioPage() {
                 >
                   <Flag size={14} color="#10b981" />
                   <span>Mark Start Here</span>
+                </button>
+
+                {/* Direct 1-second step back button */}
+                <button
+                  type="button"
+                  onClick={() => adjustStart(-1)}
+                  title="Take 1 second back as start time (compensates for hearing reaction time)"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    background: '#ecfdf5',
+                    border: '1.5px solid #059669',
+                    color: '#047857',
+                    borderRadius: '8px',
+                    padding: '0.4rem 0.65rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  <span>⏪ Take 1s Back</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => adjustStart(1)}
+                  title="Nudge start forward 1 second"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#475569',
+                    borderRadius: '8px',
+                    padding: '0.4rem 0.5rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  +1s
                 </button>
 
                 <button
@@ -646,7 +601,7 @@ export default function CutAudioPage() {
               </div>
             </div>
             <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              💡 <strong>Mobile tip:</strong> Play the song and tap <em>Mark Start</em> and <em>Mark End</em> at the exact moments you want! No tricky dragging needed.
+              💡 <strong>Mobile tip:</strong> Tap the waveform to jump to any beat, or play the song and tap <em>Mark Start</em> followed by <em>⏪ Take 1s Back</em> for the perfect cut!
             </p>
           </div>
 

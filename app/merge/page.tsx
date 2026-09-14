@@ -13,6 +13,12 @@ import {
   Music,
   Loader2,
   CheckCircle,
+  Scissors,
+  Play,
+  Pause,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
 } from 'lucide-react';
 import { AudioTrack, AudioOperation, ProcessingResult } from '@/lib/types/audio';
 import { extractAudioMetadata } from '@/lib/audio/metadata';
@@ -23,9 +29,16 @@ import { saveTrackToCache, getAllCachedTracks, CachedTrackRecord } from '@/lib/s
 import { useBeforeUnload } from '@/lib/hooks/useBeforeUnload';
 import { downloadAudioBlob } from '@/lib/audio/download-helper';
 import { FolderArchive } from 'lucide-react';
+import { SavedSongsModal } from '@/components/SavedSongsModal';
+
+export interface MergeTrackItem extends AudioTrack {
+  trimStart: number;
+  trimEnd: number;
+  isExpandedTrim?: boolean;
+}
 
 export default function MergeSongsPage() {
-  const [tracks, setTracks] = useState<AudioTrack[]>([]);
+  const [tracks, setTracks] = useState<MergeTrackItem[]>([]);
   const [crossfade, setCrossfade] = useState<boolean>(true);
   const [crossfadeDuration, setCrossfadeDuration] = useState<number>(3);
   const [fadeInFirst, setFadeInFirst] = useState<boolean>(false);
@@ -34,6 +47,10 @@ export default function MergeSongsPage() {
   const [progress, setProgress] = useState<number>(0);
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Audition preview for individual track cuts
+  const [auditionTrackId, setAuditionTrackId] = useState<string | null>(null);
+  const auditionAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Saved Songs Integration & Custom Naming
   const [savedTracks, setSavedTracks] = useState<CachedTrackRecord[]>([]);
@@ -44,6 +61,16 @@ export default function MergeSongsPage() {
 
   useBeforeUnload(isProcessing, 'Merging audio tracks is in progress. Are you sure you want to leave?');
 
+  // Stop auditioning when unmounting
+  useEffect(() => {
+    return () => {
+      if (auditionAudioRef.current) {
+        auditionAudioRef.current.pause();
+        auditionAudioRef.current = null;
+      }
+    };
+  }, []);
+
   // Check cached tracks on mount
   useEffect(() => {
     async function loadRecent() {
@@ -51,7 +78,7 @@ export default function MergeSongsPage() {
         const cached = await getAllCachedTracks();
         setSavedTracks(cached);
         if (cached.length >= 2 && tracks.length === 0) {
-          const restored = cached.slice(0, 3).map((c) => ({
+          const restored: MergeTrackItem[] = cached.slice(0, 3).map((c) => ({
             id: c.id,
             filename: c.name,
             duration: c.duration,
@@ -60,6 +87,9 @@ export default function MergeSongsPage() {
             blobUrl: URL.createObjectURL(c.blob),
             file: c.blob,
             metadata: { duration: c.duration, format: c.format as any, size: c.size },
+            trimStart: 0,
+            trimEnd: c.duration || 60,
+            isExpandedTrim: false,
           }));
           setTracks(restored);
         }
@@ -72,7 +102,7 @@ export default function MergeSongsPage() {
 
   const handleAddSavedTrack = (st: CachedTrackRecord) => {
     const blobUrl = URL.createObjectURL(st.blob);
-    const newTrack: AudioTrack = {
+    const newTrack: MergeTrackItem = {
       id: `saved_${st.id}_${Date.now()}`,
       filename: st.name,
       duration: st.duration || 60,
@@ -81,6 +111,9 @@ export default function MergeSongsPage() {
       metadata: { duration: st.duration, format: st.format as any, size: st.size },
       blobUrl,
       file: st.blob,
+      trimStart: 0,
+      trimEnd: st.duration || 60,
+      isExpandedTrim: false,
     };
     setTracks((prev) => [...prev, newTrack]);
   };
@@ -89,7 +122,7 @@ export default function MergeSongsPage() {
     setErrorMsg(null);
     setResult(null);
 
-    const newTracks: AudioTrack[] = [];
+    const newTracks: MergeTrackItem[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -107,6 +140,9 @@ export default function MergeSongsPage() {
           metadata,
           blobUrl,
           file,
+          trimStart: 0,
+          trimEnd: metadata.duration || 60,
+          isExpandedTrim: false,
         });
 
         // Cache in background
@@ -138,6 +174,87 @@ export default function MergeSongsPage() {
     });
   };
 
+  const updateTrackTrim = (idx: number, start: number, end: number) => {
+    setTracks((prev) => {
+      const updated = [...prev];
+      const t = updated[idx];
+      const safeStart = Math.max(0, Math.min(start, t.duration - 0.5));
+      const safeEnd = Math.max(safeStart + 0.5, Math.min(end, t.duration));
+      updated[idx] = {
+        ...t,
+        trimStart: Math.round(safeStart * 10) / 10,
+        trimEnd: Math.round(safeEnd * 10) / 10,
+      };
+      return updated;
+    });
+  };
+
+  const toggleExpandTrim = (idx: number) => {
+    setTracks((prev) => {
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        isExpandedTrim: !updated[idx].isExpandedTrim,
+      };
+      return updated;
+    });
+  };
+
+  const applyTrackPreset = (idx: number, preset: 'full' | 'first30' | 'first60' | 'last30') => {
+    setTracks((prev) => {
+      const updated = [...prev];
+      const t = updated[idx];
+      let start = 0;
+      let end = t.duration;
+      if (preset === 'first30') {
+        end = Math.min(30, t.duration);
+      } else if (preset === 'first60') {
+        end = Math.min(60, t.duration);
+      } else if (preset === 'last30') {
+        start = Math.max(0, t.duration - 30);
+      }
+      updated[idx] = {
+        ...t,
+        trimStart: Math.round(start),
+        trimEnd: Math.round(end),
+      };
+      return updated;
+    });
+  };
+
+  const toggleAudition = (trk: MergeTrackItem) => {
+    if (auditionTrackId === trk.id) {
+      if (auditionAudioRef.current) auditionAudioRef.current.pause();
+      setAuditionTrackId(null);
+      return;
+    }
+
+    if (auditionAudioRef.current) {
+      auditionAudioRef.current.pause();
+      auditionAudioRef.current = null;
+    }
+
+    if (!trk.blobUrl) return;
+    const audio = new Audio(trk.blobUrl);
+    auditionAudioRef.current = audio;
+    audio.currentTime = trk.trimStart;
+
+    audio.ontimeupdate = () => {
+      if (audio.currentTime >= trk.trimEnd) {
+        audio.pause();
+        setAuditionTrackId(null);
+      }
+    };
+
+    audio.onended = () => {
+      setAuditionTrackId(null);
+    };
+
+    audio.play().then(() => {
+      setAuditionTrackId(trk.id);
+    }).catch(() => setAuditionTrackId(null));
+  };
+
   const removeTrack = (index: number) => {
     setTracks((prev) => prev.filter((_, i) => i !== index));
   };
@@ -152,14 +269,27 @@ export default function MergeSongsPage() {
     setIsProcessing(true);
     setProgress(15);
 
-    const operations: AudioOperation[] = [
-      {
-        type: 'merge',
-        tracks: tracks.map((t) => t.id),
-        crossfade,
-        crossfadeDuration,
-      },
-    ];
+    const operations: AudioOperation[] = [];
+
+    // 1. Add per-track trim operations for any tracks where the user selected a custom portion
+    tracks.forEach((t) => {
+      if (t.trimStart > 0 || t.trimEnd < t.duration) {
+        operations.push({
+          type: 'trim',
+          trackId: t.id,
+          start: Math.max(0, t.trimStart),
+          end: Math.min(t.duration, Math.max(t.trimStart + 0.5, t.trimEnd)),
+        });
+      }
+    });
+
+    // 2. Add the merge operation
+    operations.push({
+      type: 'merge',
+      tracks: tracks.map((t) => t.id),
+      crossfade,
+      crossfadeDuration,
+    });
 
     if (fadeInFirst && tracks.length > 0) {
       operations.push({
@@ -222,12 +352,16 @@ export default function MergeSongsPage() {
   };
 
   const formatDuration = (sec: number) => {
+    if (isNaN(sec) || sec < 0) return '0:00';
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const totalLength = tracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+  const totalLength = tracks.reduce((acc, t) => acc + Math.max(0, t.trimEnd - t.trimStart), 0);
+  const effectiveLength = crossfade && tracks.length > 1
+    ? Math.max(1, totalLength - (tracks.length - 1) * crossfadeDuration)
+    : totalLength;
 
   return (
     <main className="app-container">
@@ -265,7 +399,7 @@ export default function MergeSongsPage() {
             </h2>
             {tracks.length > 0 && (
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Combined Duration: ~{formatDuration(totalLength)}
+                Combined Duration: ~{formatDuration(effectiveLength)}
               </span>
             )}
           </div>
@@ -340,88 +474,284 @@ export default function MergeSongsPage() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            {tracks.map((track, idx) => (
-              <div
-                key={track.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: 'var(--bg-card-subtle)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '16px',
-                  padding: '0.75rem 1rem',
-                  gap: '0.75rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      background: 'var(--text-main)',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.8rem',
-                      fontWeight: 800,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {idx + 1}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {tracks.map((track, idx) => {
+              const isTrimmed = track.trimStart > 0 || track.trimEnd < track.duration;
+              const isAuditioning = auditionTrackId === track.id;
+              const keptSeconds = Math.max(0, track.trimEnd - track.trimStart);
+
+              return (
+                <div
+                  key={track.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    background: 'var(--bg-card-subtle)',
+                    border: isTrimmed ? '1.5px solid #f97316' : '1px solid var(--border-subtle)',
+                    borderRadius: '16px',
+                    padding: '0.85rem 1rem',
+                    gap: '0.75rem',
+                    boxShadow: isTrimmed ? '0 4px 12px rgba(249, 115, 22, 0.08)' : 'none',
+                    transition: 'border 0.2s',
+                  }}
+                >
+                  {/* Track Summary Bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: '220px' }}>
+                      <div
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '50%',
+                          background: isTrimmed ? '#ea580c' : 'var(--text-main)',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {idx + 1}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '0.92rem',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {track.filename}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                          <span>{formatDuration(track.duration)} total</span>
+                          <span>•</span>
+                          <span
+                            style={{
+                              color: isTrimmed ? '#c2410c' : '#059669',
+                              fontWeight: 700,
+                              background: isTrimmed ? '#ffedd5' : '#ecfdf5',
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {isTrimmed
+                              ? `✂️ Kept: ${formatDuration(track.trimStart)} - ${formatDuration(track.trimEnd)} (${formatDuration(keptSeconds)})`
+                              : `Full Song (${formatDuration(track.duration)})`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      {/* Trim Section Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => toggleExpandTrim(idx)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          padding: '0.35rem 0.65rem',
+                          borderRadius: '8px',
+                          border: track.isExpandedTrim ? '1.5px solid #ea580c' : '1px solid #cbd5e1',
+                          background: track.isExpandedTrim ? '#fff7ed' : '#ffffff',
+                          color: track.isExpandedTrim ? '#ea580c' : '#334155',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Scissors size={13} />
+                        <span>{track.isExpandedTrim ? 'Done' : 'Select Part'}</span>
+                        {track.isExpandedTrim ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+
+                      {/* Move Up */}
+                      <button
+                        className="btn-action-ghost"
+                        disabled={idx === 0}
+                        onClick={() => moveTrack(idx, idx - 1)}
+                        title="Move earlier in mix"
+                        style={{ opacity: idx === 0 ? 0.3 : 1, padding: '0.3rem' }}
+                      >
+                        <ArrowUp size={16} />
+                      </button>
+
+                      {/* Move Down */}
+                      <button
+                        className="btn-action-ghost"
+                        disabled={idx === tracks.length - 1}
+                        onClick={() => moveTrack(idx, idx + 1)}
+                        title="Move later in mix"
+                        style={{ opacity: idx === tracks.length - 1 ? 0.3 : 1, padding: '0.3rem' }}
+                      >
+                        <ArrowDown size={16} />
+                      </button>
+
+                      {/* Remove */}
+                      <button
+                        className="btn-action-ghost"
+                        onClick={() => removeTrack(idx)}
+                        title="Remove from merge"
+                        style={{ color: 'var(--accent-red)', padding: '0.3rem' }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
+
+                  {/* Expandable Per-Track Trim Section */}
+                  {track.isExpandedTrim && (
                     <div
                       style={{
-                        fontWeight: 700,
-                        fontSize: '0.92rem',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        marginTop: '0.25rem',
+                        padding: '0.9rem',
+                        background: '#ffffff',
+                        border: '1.5px dashed #fed7aa',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
                       }}
                     >
-                      {track.filename}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {formatDuration(track.duration)} • {track.format.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.86rem', color: '#9a3412' }}>
+                          ✂️ Select Part to Join ({formatDuration(track.trimStart)} to {formatDuration(track.trimEnd)})
+                        </div>
 
-                {/* Reorder and Delete controls */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <button
-                    className="btn-action-ghost"
-                    disabled={idx === 0}
-                    onClick={() => moveTrack(idx, idx - 1)}
-                    title="Move earlier"
-                    style={{ opacity: idx === 0 ? 0.3 : 1, padding: '0.3rem' }}
-                  >
-                    <ArrowUp size={16} />
-                  </button>
-                  <button
-                    className="btn-action-ghost"
-                    disabled={idx === tracks.length - 1}
-                    onClick={() => moveTrack(idx, idx + 1)}
-                    title="Move later"
-                    style={{ opacity: idx === tracks.length - 1 ? 0.3 : 1, padding: '0.3rem' }}
-                  >
-                    <ArrowDown size={16} />
-                  </button>
-                  <button
-                    className="btn-action-ghost"
-                    onClick={() => removeTrack(idx)}
-                    title="Remove from merge"
-                    style={{ color: 'var(--accent-red)', padding: '0.3rem' }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                        {/* Audition Trimmed Segment Button */}
+                        <button
+                          type="button"
+                          onClick={() => toggleAudition(track)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '8px',
+                            background: isAuditioning ? '#ea580c' : '#fff7ed',
+                            border: '1.5px solid #ea580c',
+                            color: isAuditioning ? '#ffffff' : '#c2410c',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {isAuditioning ? <Pause size={13} /> : <Play size={13} fill="currentColor" />}
+                          <span>{isAuditioning ? 'Pause Preview' : 'Audition Cut'}</span>
+                        </button>
+                      </div>
+
+                      {/* Range Sliders */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                        {/* Start Controller */}
+                        <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#059669' }}>🚩 Start Time</span>
+                            <span style={{ fontSize: '0.88rem', fontWeight: 800, fontFamily: 'monospace' }}>{formatDuration(track.trimStart)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={Math.max(0, track.trimEnd - 1)}
+                            value={track.trimStart}
+                            onChange={(e) => updateTrackTrim(idx, Number(e.target.value), track.trimEnd)}
+                            style={{ width: '100%', accentColor: '#10b981' }}
+                          />
+                          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.35rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => updateTrackTrim(idx, track.trimStart - 1, track.trimEnd)}
+                              style={{ flex: 1, padding: '0.2rem', fontSize: '0.74rem', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+                            >
+                              -1s
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateTrackTrim(idx, track.trimStart + 1, track.trimEnd)}
+                              style={{ flex: 1, padding: '0.2rem', fontSize: '0.74rem', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+                            >
+                              +1s
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* End Controller */}
+                        <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#dc2626' }}>🏁 End Time</span>
+                            <span style={{ fontSize: '0.88rem', fontWeight: 800, fontFamily: 'monospace' }}>{formatDuration(track.trimEnd)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={track.trimStart + 1}
+                            max={track.duration}
+                            value={track.trimEnd}
+                            onChange={(e) => updateTrackTrim(idx, track.trimStart, Number(e.target.value))}
+                            style={{ width: '100%', accentColor: '#ef4444' }}
+                          />
+                          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.35rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => updateTrackTrim(idx, track.trimStart, track.trimEnd - 1)}
+                              style={{ flex: 1, padding: '0.2rem', fontSize: '0.74rem', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+                            >
+                              -1s
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateTrackTrim(idx, track.trimStart, track.trimEnd + 1)}
+                              style={{ flex: 1, padding: '0.2rem', fontSize: '0.74rem', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+                            >
+                              +1s
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick presets */}
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>Quick:</span>
+                        <button
+                          type="button"
+                          onClick={() => applyTrackPreset(idx, 'full')}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 700, border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}
+                        >
+                          Full Song
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTrackPreset(idx, 'first30')}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 700, border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}
+                        >
+                          First 30s
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTrackPreset(idx, 'first60')}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 700, border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}
+                        >
+                          First 60s
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTrackPreset(idx, 'last30')}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 700, border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}
+                        >
+                          Last 30s
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -560,111 +890,14 @@ export default function MergeSongsPage() {
         />
       )}
 
-      {/* Saved Songs Selection Modal */}
-      {showSavedPicker && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
-          }}
-          onClick={() => setShowSavedPicker(false)}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '20px',
-              maxWidth: '520px',
-              width: '100%',
-              padding: '1.5rem',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              position: 'relative',
-              maxHeight: '85vh',
-              overflowY: 'auto',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FolderArchive size={20} color="var(--accent-coral)" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Pick from Saved Songs</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSavedPicker(false)}
-                style={{
-                  background: '#f1f5f9',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  fontWeight: 800,
-                  color: '#64748b',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-              Select any song you previously cut or recorded to add it directly to this merge mix:
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {savedTracks.map((st) => (
-                <div
-                  key={st.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.75rem 1rem',
-                    background: '#f8fafc',
-                    borderRadius: '12px',
-                    border: '1.5px solid #e2e8f0',
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0, marginRight: '0.75rem' }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {st.name}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: '#475569', marginTop: '0.15rem' }}>
-                      {Math.floor(st.duration / 60)}:
-                      {Math.floor(st.duration % 60).toString().padStart(2, '0')} • {(st.size / (1024 * 1024)).toFixed(1)} MB • {st.format.toUpperCase()}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn-big"
-                    onClick={() => {
-                      handleAddSavedTrack(st);
-                      setShowSavedPicker(false);
-                    }}
-                    style={{
-                      padding: '0.45rem 1rem',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      minHeight: '38px',
-                      background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                      color: '#ffffff',
-                    }}
-                  >
-                    <span>+ Add to Mix</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Saved Songs Selection Modal with Audio Preview */}
+      <SavedSongsModal
+        isOpen={showSavedPicker}
+        onClose={() => setShowSavedPicker(false)}
+        onSelectTrack={(st) => handleAddSavedTrack(st)}
+        actionLabel="+ Add to Merge"
+        title="Choose from Saved Songs"
+      />
 
       {/* Repositioned Bottom Contextual AI Assistant */}
       {tracks.length > 0 && (

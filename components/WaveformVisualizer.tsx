@@ -8,6 +8,8 @@ interface WaveformVisualizerProps {
   duration: number;
   selection: { start: number; end: number };
   onSelectionChange?: (sel: { start: number; end: number }) => void;
+  externalPlayheadTime?: number;
+  onSeek?: (seconds: number) => void;
   disabled?: boolean;
 }
 
@@ -16,6 +18,8 @@ export function WaveformVisualizer({
   duration,
   selection,
   onSelectionChange,
+  externalPlayheadTime,
+  onSeek,
   disabled = false,
 }: WaveformVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,6 +105,13 @@ export function WaveformVisualizer({
       }
     };
   }, [audioFile]);
+
+  // 1b. Sync external playhead time from parent audio player
+  useEffect(() => {
+    if (externalPlayheadTime !== undefined) {
+      setCurrentTime(externalPlayheadTime);
+    }
+  }, [externalPlayheadTime]);
 
   // 2. Playback animation loop
   const updatePlayback = useCallback(() => {
@@ -197,19 +208,23 @@ export function WaveformVisualizer({
       const x = i * barWidth;
       const ratio = i / barCount;
       const isSelected = ratio >= startRatio && ratio <= endRatio;
-      const isPassedPlayhead = ratio <= playRatio && isSelected;
+      const isPassedPlayhead = ratio <= playRatio;
 
       const barHeight = Math.max(6, peak * (height - 12));
       const y = (height - barHeight) / 2;
 
       if (isSelected) {
         if (isPassedPlayhead) {
-          ctx.fillStyle = '#EA580C'; // Darker coral for passed audio
+          ctx.fillStyle = '#EA580C'; // Active passed audio in selection
         } else {
-          ctx.fillStyle = '#FF6B4A'; // Warm sunset coral for selected
+          ctx.fillStyle = '#FF6B4A'; // Warm sunset coral for selected range
         }
       } else {
-        ctx.fillStyle = '#E2E8F0'; // Soft muted gray for cut audio
+        if (isPassedPlayhead) {
+          ctx.fillStyle = '#94A3B8'; // Slate for passed audio outside selection
+        } else {
+          ctx.fillStyle = '#E2E8F0'; // Soft muted gray for unselected audio
+        }
       }
 
       // Rounded bar
@@ -218,11 +233,17 @@ export function WaveformVisualizer({
       ctx.fill();
     });
 
-    // Draw playhead line
-    if (currentTime >= selection.start && currentTime <= selection.end) {
+    // Draw playhead line across waveform
+    if (currentTime >= 0 && currentTime <= duration) {
       const playheadX = playRatio * width;
-      ctx.fillStyle = '#1E293B';
+      const isInSelection = currentTime >= selection.start && currentTime <= selection.end;
+      ctx.fillStyle = isInSelection ? '#0F172A' : '#EA580C';
       ctx.fillRect(playheadX - 1.5, 0, 3, height);
+
+      // Top indicator knob
+      ctx.beginPath();
+      ctx.arc(playheadX, 6, 4.5, 0, Math.PI * 2);
+      ctx.fill();
     }
   }, [peaks, duration, selection, currentTime]);
 
@@ -271,6 +292,16 @@ export function WaveformVisualizer({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled || isDragging) return;
+    const clickedTime = getTimeFromEvent(e.clientX);
+    const clampedTime = Math.max(0, Math.min(duration, Math.round(clickedTime * 10) / 10));
+    setCurrentTime(clampedTime);
+    if (onSeek) {
+      onSeek(clampedTime);
+    }
+  };
+
   const startPercent = duration > 0 ? (selection.start / duration) * 100 : 0;
   const endPercent = duration > 0 ? (selection.end / duration) * 100 : 100;
   const selectedDuration = Math.max(0, selection.end - selection.start);
@@ -281,7 +312,10 @@ export function WaveformVisualizer({
       <div
         ref={containerRef}
         className="waveform-track"
+        onClick={handleTrackClick}
         onPointerMove={handlePointerMove}
+        style={{ cursor: disabled ? 'default' : 'pointer' }}
+        title="Tap or drag anywhere along the waveform to seek"
       >
         <canvas
           ref={canvasRef}

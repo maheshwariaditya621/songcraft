@@ -19,6 +19,7 @@ import {
 import { getAllCachedTracks, clearAllCachedTracks, renameCachedTrack } from '@/lib/storage/audio-cache';
 import { downloadAudioBlob } from '@/lib/audio/download-helper';
 import { Info, Edit3 } from 'lucide-react';
+import { Portal } from '@/components/Portal';
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -215,119 +216,122 @@ export function AppHeader() {
 
       {/* Tool Limits & Specs Modal */}
       {showLimitsModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
-          }}
-          onClick={() => setShowLimitsModal(false)}
-        >
+        <Portal>
           <div
             style={{
-              background: '#ffffff',
-              borderRadius: '20px',
-              maxWidth: '560px',
-              width: '100%',
-              padding: '1.75rem',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              position: 'relative',
-              maxHeight: '90vh',
-              overflowY: 'auto',
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.75)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 999999,
+              padding: '1rem',
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setShowLimitsModal(false)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '1.4rem' }}>⚡</span>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                  SongCraft Tool Limits & Specs
-                </h3>
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: '20px',
+                maxWidth: '560px',
+                width: '100%',
+                padding: '1.75rem',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                position: 'relative',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                border: '1px solid #e2e8f0',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>⚡</span>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    SongCraft Tool Limits & Specs
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLimitsModal(false)}
+                  style={{
+                    background: '#f1f5f9',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: '1rem',
+                    color: '#64748b',
+                  }}
+                >
+                  ✕
+                </button>
               </div>
+
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+                SongCraft runs <strong>100% on your device</strong> using high-performance Web Audio API & FFmpeg WebAssembly. Because no data is sent to servers, there are <strong>zero queues, zero subscriptions, and unlimited daily usage</strong>!
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--accent-coral)', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
+                    ✂️ Cut / Trim Audio
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+                    • Max recommended file size: <strong>200 MB</strong><br />
+                    • Max duration: <strong>Up to 30 minutes</strong> per track<br />
+                    • Supported formats: <strong>MP3, WAV, AAC, M4A, OGG, OPUS, FLAC</strong>
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                  <div style={{ fontWeight: 800, color: '#7c3aed', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
+                    🔀 Merge / Join Audio
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+                    • Max tracks per mix: <strong>Up to 10 songs</strong> simultaneously<br />
+                    • Max combined size: <strong>250 MB</strong><br />
+                    • Supported crossfade: <strong>0 to 10 seconds</strong> smooth blending
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                  <div style={{ fontWeight: 800, color: '#0284c7', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
+                    🎬 Video to MP3
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+                    • Max video file size: <strong>Up to 500 MB</strong><br />
+                    • Supported formats: <strong>MP4, MKV, MOV, WebM, AVI</strong><br />
+                    • Output format: <strong>Clean 320kbps MP3</strong>
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                  <div style={{ fontWeight: 800, color: '#059669', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
+                    💬 WhatsApp Voice Notes & 🎙️ Live Recorder
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+                    • WhatsApp size: <strong>Up to 100 MB</strong> (.opus / .ogg)<br />
+                    • Microphone recording: <strong>Up to 60 minutes</strong> per session
+                  </div>
+                </div>
+              </div>
+
               <button
                 type="button"
+                className="btn-big btn-big-primary"
                 onClick={() => setShowLimitsModal(false)}
-                style={{
-                  background: '#f1f5f9',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  color: '#64748b',
-                }}
+                style={{ width: '100%', minHeight: '44px', fontWeight: 700 }}
               >
-                ✕
+                Got it, Continue Editing!
               </button>
             </div>
-
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-              SongCraft runs <strong>100% on your device</strong> using high-performance Web Audio API & FFmpeg WebAssembly. Because no data is sent to servers, there are <strong>zero queues, zero subscriptions, and unlimited daily usage</strong>!
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontWeight: 800, color: 'var(--accent-coral)', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
-                  ✂️ Cut / Trim Audio
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                  • Max recommended file size: <strong>200 MB</strong><br />
-                  • Max duration: <strong>Up to 30 minutes</strong> per track<br />
-                  • Supported formats: <strong>MP3, WAV, AAC, M4A, OGG, OPUS, FLAC</strong>
-                </div>
-              </div>
-
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontWeight: 800, color: '#7c3aed', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
-                  🔀 Merge / Join Audio
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                  • Max tracks per mix: <strong>Up to 10 songs</strong> simultaneously<br />
-                  • Max combined size: <strong>250 MB</strong><br />
-                  • Supported crossfade: <strong>0 to 10 seconds</strong> smooth blending
-                </div>
-              </div>
-
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontWeight: 800, color: '#0284c7', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
-                  🎬 Video to MP3
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                  • Max video file size: <strong>Up to 500 MB</strong><br />
-                  • Supported formats: <strong>MP4, MKV, MOV, WebM, AVI</strong><br />
-                  • Output format: <strong>Clean 320kbps MP3</strong>
-                </div>
-              </div>
-
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontWeight: 800, color: '#059669', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
-                  💬 WhatsApp Voice Notes & 🎙️ Live Recorder
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                  • WhatsApp size: <strong>Up to 100 MB</strong> (.opus / .ogg)<br />
-                  • Microphone recording: <strong>Up to 60 minutes</strong> per session
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="btn-big btn-big-primary"
-              onClick={() => setShowLimitsModal(false)}
-              style={{ width: '100%', minHeight: '44px', fontWeight: 700 }}
-            >
-              Got it, Continue Editing!
-            </button>
           </div>
-        </div>
+        </Portal>
       )}
 
       {/* Navigation Tabs */}
